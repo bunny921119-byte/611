@@ -1,0 +1,763 @@
+<!-- ... existing code ... -->
+    <!-- html2canvas for saving image -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, addDoc, updateDoc, onSnapshot, query, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Expose Firebase modules globally for the application
+        window.FirebaseSDK = {
+            initializeApp,
+            getAuth,
+            signInAnonymously,
+            signInWithCustomToken,
+            onAuthStateChanged,
+            getFirestore,
+            collection,
+            doc,
+            addDoc,
+            updateDoc,
+            onSnapshot,
+            query,
+            serverTimestamp
+        };
+    </script>
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            100: '#dcfce7',
+                            500: '#22c55e',
+                            700: '#15803d',
+                            800: '#166534',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['"Zen Maru Gothic"', '"Plus Jakarta Sans"', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+<!-- ... existing code ... -->
+    <!-- Header Navigation / Info Bar -->
+    <header class="relative z-20 p-4 md:px-8 flex flex-wrap justify-between items-center gap-4 glass-panel shadow-sm rounded-b-2xl mx-2 md:mx-6 mt-2">
+        <div class="flex items-center gap-3">
+            <div class="w-12 h-12 bg-emerald-500 rounded-2xl flex items-center justify-center text-white text-2xl shadow-lg shadow-emerald-500/30">
+                <i class="fa-solid fa-tree"></i>
+            </div>
+            <div>
+                <h1 class="text-xl md:text-2xl font-bold text-gray-800 tracking-wide flex items-center gap-2">
+                    夢想許願樹 
+                    <span id="tree-stage-badge" class="text-xs px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full font-semibold border border-emerald-300">
+                        🌱 初發芽
+                    </span>
+                    <span id="sync-status" class="text-xs px-2 py-0.5 bg-amber-100 text-amber-800 rounded-full font-medium flex items-center gap-1">
+                        <i class="fa-solid fa-sync fa-spin text-[10px]"></i> 連線中...
+                    </span>
+                </h1>
+                <!-- Class Goal Progress Bar -->
+                <div class="flex items-center gap-2 mt-1">
+                    <div class="w-32 md:w-48 bg-gray-200 h-2.5 rounded-full overflow-hidden border border-gray-300/50">
+                        <div id="goal-progress-bar" class="bg-gradient-to-r from-emerald-400 to-green-600 h-full w-0 transition-all duration-500"></div>
+                    </div>
+                    <span id="goal-text" class="text-xs font-bold text-emerald-700">0 / 30 片</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Controls & Statistics -->
+        <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+            <!-- Search Input -->
+            <div class="relative">
+                <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm"></i>
+                <input type="text" id="search-input" placeholder="搜尋學生名字或願望..." 
+                    class="pl-9 pr-3 py-2 text-sm bg-white/80 border border-emerald-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-400 w-32 sm:w-44 transition-all">
+            </div>
+
+            <!-- Settings Button -->
+            <button id="btn-open-config" title="雲端連線設定" class="p-2 bg-white/80 hover:bg-white text-emerald-700 rounded-xl border border-emerald-200 text-sm shadow-sm transition">
+                <i class="fa-solid fa-cloud-gear"></i>
+            </button>
+
+            <!-- Action Buttons -->
+            <button id="btn-zoom-in" title="放大" class="p-2 bg-white/80 hover:bg-white text-gray-700 rounded-xl border border-gray-200 text-sm shadow-sm transition">
+                <i class="fa-solid fa-plus"></i>
+            </button>
+            <button id="btn-zoom-out" title="縮放" class="p-2 bg-white/80 hover:bg-white text-gray-700 rounded-xl border border-gray-200 text-sm shadow-sm transition">
+                <i class="fa-solid fa-minus"></i>
+            </button>
+            <button id="btn-reset-view" title="重設視角" class="p-2 bg-white/80 hover:bg-white text-gray-700 rounded-xl border border-gray-200 text-sm shadow-sm transition">
+                <i class="fa-solid fa-rotate"></i>
+            </button>
+            <button id="btn-export" title="下載紀念照片" class="p-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm shadow-md transition flex items-center gap-1.5 px-3">
+                <i class="fa-solid fa-camera"></i>
+                <span class="hidden md:inline">保存樹影</span>
+            </button>
+        </div>
+    </header>
+<!-- ... existing code ... -->
+                <!-- Leaf Shape Selection -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">選擇樹葉形狀</label>
+                    <div class="grid grid-cols-4 gap-2" id="shape-picker-group">
+                        <button type="button" data-shape="classic" class="shape-opt py-2 px-2 rounded-xl border-2 border-emerald-500 bg-emerald-50 text-emerald-800 text-xs font-bold flex items-center justify-center gap-1 transition">
+                            <i class="fa-solid fa-leaf"></i> 經典葉
+                        </button>
+                        <button type="button" data-shape="maple" class="shape-opt py-2 px-2 rounded-xl border-2 border-gray-200 bg-white text-gray-600 text-xs font-bold flex items-center justify-center gap-1 transition">
+                            <i class="fa-solid fa-cannabis"></i> 楓葉形
+                        </button>
+                        <button type="button" data-shape="ginkgo" class="shape-opt py-2 px-2 rounded-xl border-2 border-gray-200 bg-white text-gray-600 text-xs font-bold flex items-center justify-center gap-1 transition">
+                            <i class="fa-solid fa-fan"></i> 銀杏葉
+                        </button>
+                        <button type="button" data-shape="heart" class="shape-opt py-2 px-2 rounded-xl border-2 border-gray-200 bg-white text-gray-600 text-xs font-bold flex items-center justify-center gap-1 transition">
+                            <i class="fa-solid fa-heart"></i> 心形葉
+                        </button>
+                    </div>
+                </div>
+<!-- ... existing code ... -->
+    <!-- Modal 3: Firebase Config Settings -->
+    <div id="modal-config" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="glass-panel w-full max-w-md rounded-3xl p-6 shadow-2xl border border-white transform scale-95 transition-transform duration-300">
+            <div class="flex justify-between items-center pb-3 border-b border-gray-200/60">
+                <h3 class="text-lg font-bold text-gray-800 flex items-center gap-2">
+                    <i class="fa-solid fa-cloud text-emerald-600"></i>
+                    即時雲端連線狀態
+                </h3>
+                <button id="btn-close-config" class="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100 transition">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div class="mt-4 space-y-3 text-sm text-gray-600">
+                <p class="leading-relaxed">
+                    預設已啟用內建的即時資料庫頻道！同一個網頁網址打開的所有裝置（例如學生手機與投影幕）皆可同步收到留言與祝福。
+                </p>
+                <div class="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-900 text-xs">
+                    <i class="fa-solid fa-circle-check text-emerald-600 mr-1"></i>
+                    <strong>全班 30 人連線模式：</strong>建議直接投影此頁面於大螢幕，學生掃描網址或點擊連結即可開始互動。
+                </div>
+            </div>
+            <button id="btn-confirm-config" class="w-full mt-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-md transition">
+                好的，我知道了
+            </button>
+        </div>
+    </div>
+
+    <!-- Application Logic Script -->
+    <script>
+        // --- DATA & STATE MANAGEMENT ---
+        const COLOR_PRESETS = {
+            emerald: { bg: '#10b981', hover: '#059669', text: '#ffffff', name: '翠綠' },
+            lime:    { bg: '#a3e635', hover: '#84cc16', text: '#365314', name: '嫩綠' },
+            amber:   { bg: '#fbbf24', hover: '#f59e0b', text: '#78350f', name: '琥珀金' },
+            teal:    { bg: '#14b8a6', hover: '#0d9488', text: '#ffffff', name: '青綠' },
+            rose:    { bg: '#fb7185', hover: '#f43f5e', text: '#ffffff', name: '楓紅' }
+        };
+
+        const SHAPE_ICONS = {
+            classic: 'fa-leaf',
+            maple: 'fa-cannabis',
+            ginkgo: 'fa-fan',
+            heart: 'fa-heart'
+        };
+
+        const CLASS_GOAL = 30; // 30 students goal
+        let leavesData = [];
+        let activeLeafId = null;
+        let selectedColor = 'emerald';
+        let selectedShape = 'classic';
+
+        // Pan & Zoom Viewport State
+        let zoomScale = 1;
+        let panX = 0;
+        let panY = 0;
+        let isDraggingView = false;
+        let startX, startY;
+
+        // Firebase Instances
+        let db = null;
+        let auth = null;
+        let currentUser = null;
+        let leavesCollectionRef = null;
+
+        // --- DOM ELEMENTS ---
+        const treeViewport = document.getElementById('tree-viewport');
+        const treeContainer = document.getElementById('tree-container');
+        const leavesContainer = document.getElementById('leaves-container');
+        const leafCountEl = document.getElementById('leaf-count');
+        const treeStageBadge = document.getElementById('tree-stage-badge');
+        const searchInput = document.getElementById('search-input');
+        const syncStatus = document.getElementById('sync-status');
+        const goalProgressBar = document.getElementById('goal-progress-bar');
+        const goalText = document.getElementById('goal-text');
+
+        // Modal Elements
+        const modalCreate = document.getElementById('modal-create');
+        const modalCreateCard = document.getElementById('modal-create-card');
+        const modalView = document.getElementById('modal-view');
+        const modalViewCard = document.getElementById('modal-view-card');
+        const modalConfig = document.getElementById('modal-config');
+        
+        const formAddLeaf = document.getElementById('form-add-leaf');
+        const inputAuthor = document.getElementById('input-author');
+        const inputMessage = document.getElementById('input-message');
+        const charCount = document.getElementById('char-count');
+        const leafPreview = document.getElementById('leaf-preview');
+        const previewTextSnippet = document.getElementById('preview-text-snippet');
+
+        // View Modal Elements
+        const viewAuthor = document.getElementById('view-author');
+        const viewTime = document.getElementById('view-time');
+        const viewMessage = document.getElementById('view-message');
+        const viewLikesCount = document.getElementById('view-likes-count');
+        const viewLeafId = document.getElementById('view-leaf-id');
+        const viewLeafHeader = document.getElementById('view-leaf-header');
+        const viewLeafIcon = document.getElementById('view-leaf-icon');
+        const btnLike = document.getElementById('btn-like');
+
+        // --- INITIALIZATION ---
+        window.addEventListener('DOMContentLoaded', async () => {
+            initParticles();
+            setupEventListeners();
+            setupPanZoom();
+
+            // Initialize Firebase Realtime Listener
+            await initFirebaseRealtime();
+        });
+
+        // Initialize Firebase with Realtime Listener
+        async function initFirebaseRealtime() {
+            try {
+                const {
+                    initializeApp,
+                    getAuth,
+                    signInAnonymously,
+                    signInWithCustomToken,
+                    onAuthStateChanged,
+                    getFirestore,
+                    collection,
+                    doc,
+                    addDoc,
+                    updateDoc,
+                    onSnapshot,
+                    query
+                } = window.FirebaseSDK;
+
+                // Environment Firebase Config or Fallback
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'leaf-wish-tree-class30';
+                const firebaseConfig = typeof __firebase_config !== 'undefined' 
+                    ? JSON.parse(__firebase_config)
+                    : {
+                        apiKey: "AIzaSyDemoKeyWishTree30",
+                        authDomain: "leaf-tree-demo.firebaseapp.com",
+                        projectId: "leaf-tree-demo",
+                        storageBucket: "leaf-tree-demo.appspot.com",
+                        messagingSenderId: "123456789",
+                        appId: "1:123456789:web:abcdef"
+                    };
+
+                const app = initializeApp(firebaseConfig);
+                db = getFirestore(app);
+                auth = getAuth(app);
+
+                // Authenticate
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+
+                onAuthStateChanged(auth, (user) => {
+                    if (user) {
+                        currentUser = user;
+                        // Firestore collection path strictly adhering to artifacts rules
+                        leavesCollectionRef = collection(db, 'artifacts', appId, 'public', 'data', 'wish_leaves');
+                        listenToRealtimeLeaves();
+                    }
+                });
+
+            } catch (error) {
+                console.warn('Firebase connection note:', error);
+                // Fallback to local memory session if offline / mock mode
+                syncStatus.className = 'text-xs px-2 py-0.5 bg-gray-100 text-gray-700 rounded-full font-medium flex items-center gap-1';
+                syncStatus.innerHTML = '<i class="fa-solid fa-hard-drive text-gray-500"></i> 單機預覽模式';
+                renderLeaves();
+            }
+        }
+
+        // Realtime Firestore Listener
+        function listenToRealtimeLeaves() {
+            if (!leavesCollectionRef) return;
+
+            const { onSnapshot } = window.FirebaseSDK;
+
+            onSnapshot(leavesCollectionRef, (snapshot) => {
+                const updatedLeaves = [];
+                snapshot.forEach(docSnap => {
+                    const data = docSnap.data();
+                    updatedLeaves.push({
+                        id: docSnap.id,
+                        ...data
+                    });
+                });
+
+                // Update UI state
+                const isFirstLoad = leavesData.length === 0;
+                const previousCount = leavesData.length;
+                leavesData = updatedLeaves;
+
+                renderLeaves(searchInput.value);
+                updateTreeProgress();
+
+                syncStatus.className = 'text-xs px-2 py-0.5 bg-emerald-100 text-emerald-800 rounded-full font-medium flex items-center gap-1';
+                syncStatus.innerHTML = '<i class="fa-solid fa-wifi text-emerald-600"></i> 即時連線中';
+
+                // Play animation when new leaf arrives
+                if (!isFirstLoad && leavesData.length > previousCount) {
+                    showToast('🍃 樹上長出了新的許願葉！');
+                }
+            }, (error) => {
+                console.error("Realtime listener error:", error);
+                syncStatus.className = 'text-xs px-2 py-0.5 bg-rose-100 text-rose-800 rounded-full font-medium flex items-center gap-1';
+                syncStatus.innerHTML = '<i class="fa-solid fa-triangle-exclamation text-rose-600"></i> 連線受限';
+            });
+        }
+
+        // Background floating particles for atmosphere
+        function initParticles() {
+            const container = document.getElementById('particles-container');
+            if (!container) return; // Prevent null error if container element is not found
+            
+            const particleCount = 20;
+
+            for (let i = 0; i < particleCount; i++) {
+                const p = document.createElement('div');
+                p.className = 'particle';
+                const size = Math.random() * 8 + 4;
+                p.style.width = `${size}px`;
+                p.style.height = `${size}px`;
+                p.style.left = `${Math.random() * 100}%`;
+                p.style.animationDuration = `${Math.random() * 10 + 10}s`;
+                p.style.animationDelay = `${Math.random() * 5}s`;
+                container.appendChild(p);
+            }
+        }
+
+        // --- RENDER LEAVES ON TREE CANOPY ---
+        function renderLeaves(filterQuery = '') {
+            leavesContainer.innerHTML = '';
+            
+            const filtered = leavesData.filter(leaf => {
+                if (!filterQuery) return true;
+                const q = filterQuery.toLowerCase();
+                return (leaf.author && leaf.author.toLowerCase().includes(q)) || 
+                       (leaf.message && leaf.message.toLowerCase().includes(q));
+            });
+
+            filtered.forEach(leaf => {
+                const leafNode = createLeafDOMNode(leaf);
+                leavesContainer.appendChild(leafNode);
+            });
+
+            leafCountEl.textContent = leavesData.length;
+        }
+
+        function createLeafDOMNode(leaf) {
+            const el = document.createElement('div');
+            el.className = 'leaf-item absolute cursor-pointer flex flex-col items-center justify-center p-2 transition-transform duration-300 animate-leaf-in';
+            
+            // Calculate pixel coords based on container (800x800)
+            const posX = (leaf.x || 0.5) * 800;
+            const posY = (leaf.y || 0.3) * 800;
+            
+            el.style.left = `${posX}px`;
+            el.style.top = `${posY}px`;
+            el.style.transform = `translate(-50%, -50%) rotate(${leaf.rot || 0}deg)`;
+            el.dataset.id = leaf.id;
+
+            const colorConfig = COLOR_PRESETS[leaf.color] || COLOR_PRESETS.emerald;
+            const iconClass = SHAPE_ICONS[leaf.shape] || 'fa-leaf';
+
+            el.innerHTML = `
+                <div class="relative w-14 h-14 md:w-16 md:h-16 flex flex-col items-center justify-center rounded-2xl shadow-lg border border-white/40 transition-all duration-300 group"
+                     style="background-color: ${colorConfig.bg}; color: ${colorConfig.text}">
+                    <i class="fa-solid ${iconClass} text-xl md:text-2xl drop-shadow-sm group-hover:scale-110 transition-transform"></i>
+                    <span class="text-[10px] md:text-xs font-bold mt-0.5 truncate max-w-[48px] px-0.5">${escapeHTML(leaf.author || '匿名')}</span>
+                    
+                    ${(leaf.likes || 0) > 0 ? `
+                        <div class="absolute -top-1 -right-1 bg-rose-500 text-white text-[9px] font-bold px-1.5 py-0.2 rounded-full shadow flex items-center gap-0.5">
+                            <i class="fa-solid fa-heart text-[8px]"></i>${leaf.likes}
+                        </div>
+                    ` : ''}
+                </div>
+            `;
+
+            el.addEventListener('click', (e) => {
+                e.stopPropagation();
+                openViewModal(leaf.id);
+            });
+
+            return el;
+        }
+
+        // Generate organic canopy coordinate within tree crown radius
+        function generateOrganicLeafPosition() {
+            const centerX = 0.5;
+            const centerY = 0.33;
+            const radius = 0.22;
+
+            const angle = Math.random() * Math.PI * 2;
+            const r = Math.sqrt(Math.random()) * radius;
+
+            let x = centerX + r * Math.cos(angle);
+            let y = centerY + r * Math.sin(angle) * 0.85;
+            const rot = (Math.random() - 0.5) * 40;
+
+            return { x, y, rot };
+        }
+
+        // --- TREE GROWTH PROGRESS STAGE ---
+        function updateTreeProgress() {
+            const count = leavesData.length;
+            
+            // Progress Bar Update
+            const percentage = Math.min(100, Math.round((count / CLASS_GOAL) * 100));
+            goalProgressBar.style.width = `${percentage}%`;
+            goalText.textContent = `${count} / ${CLASS_GOAL} 片 (${percentage}%)`;
+
+            if (count < 5) {
+                treeStageBadge.className = 'text-xs px-2.5 py-1 bg-emerald-100 text-emerald-800 rounded-full font-semibold border border-emerald-300';
+                treeStageBadge.textContent = '🌱 初發芽';
+            } else if (count < 15) {
+                treeStageBadge.className = 'text-xs px-2.5 py-1 bg-lime-100 text-lime-800 rounded-full font-semibold border border-lime-300';
+                treeStageBadge.textContent = '🌿 漸生枝葉';
+            } else if (count < 30) {
+                treeStageBadge.className = 'text-xs px-2.5 py-1 bg-green-100 text-green-800 rounded-full font-semibold border border-green-300';
+                treeStageBadge.textContent = '🌳 茁壯成樹';
+            } else {
+                treeStageBadge.className = 'text-xs px-2.5 py-1 bg-teal-100 text-teal-800 rounded-full font-semibold border border-teal-300 animate-pulse';
+                treeStageBadge.textContent = '✨ 全班達標！茂盛大樹';
+            }
+        }
+
+        // --- EVENT LISTENERS ---
+        function setupEventListeners() {
+            document.getElementById('btn-open-modal').addEventListener('click', openCreateModal);
+            document.getElementById('btn-close-create').addEventListener('click', closeCreateModal);
+            document.getElementById('btn-close-view').addEventListener('click', closeViewModal);
+            document.getElementById('btn-open-config').addEventListener('click', () => {
+                modalConfig.classList.remove('opacity-0', 'pointer-events-none');
+            });
+            document.getElementById('btn-close-config').addEventListener('click', () => {
+                modalConfig.classList.add('opacity-0', 'pointer-events-none');
+            });
+            document.getElementById('btn-confirm-config').addEventListener('click', () => {
+                modalConfig.classList.add('opacity-0', 'pointer-events-none');
+            });
+
+            modalCreate.addEventListener('click', (e) => {
+                if (e.target === modalCreate) closeCreateModal();
+            });
+            modalView.addEventListener('click', (e) => {
+                if (e.target === modalView) closeViewModal();
+            });
+
+            inputMessage.addEventListener('input', (e) => {
+                const val = e.target.value;
+                charCount.textContent = val.length;
+                previewTextSnippet.textContent = val ? val : '寫下許願留言...';
+            });
+
+            inputAuthor.addEventListener('input', (e) => {
+                const val = e.target.value;
+                leafPreview.textContent = val ? val.substring(0, 2) : '心願';
+            });
+
+            // Color Selection Handles
+            document.querySelectorAll('#color-picker-group .color-opt').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('#color-picker-group .color-opt').forEach(b => {
+                        b.classList.remove('ring-2', 'ring-emerald-500', 'border-white');
+                        b.classList.add('border-transparent');
+                        b.innerHTML = '';
+                    });
+                    btn.classList.add('ring-2', 'ring-emerald-500', 'border-white');
+                    btn.innerHTML = '<i class="fa-solid fa-check text-xs"></i>';
+                    
+                    selectedColor = btn.dataset.color;
+                    updatePreviewStyle();
+                });
+            });
+
+            // Shape Selection Handles
+            document.querySelectorAll('#shape-picker-group .shape-opt').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('#shape-picker-group .shape-opt').forEach(b => {
+                        b.classList.remove('border-emerald-500', 'bg-emerald-50', 'text-emerald-800');
+                        b.classList.add('border-gray-200', 'bg-white', 'text-gray-600');
+                    });
+                    btn.classList.remove('border-gray-200', 'bg-white', 'text-gray-600');
+                    btn.classList.add('border-emerald-500', 'bg-emerald-50', 'text-emerald-800');
+
+                    selectedShape = btn.dataset.shape;
+                    updatePreviewStyle();
+                });
+            });
+
+            // Submit New Leaf Form (Writes to Firestore)
+            formAddLeaf.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                const author = inputAuthor.value.trim();
+                const message = inputMessage.value.trim();
+
+                if (!author || !message) return;
+
+                const pos = generateOrganicLeafPosition();
+                const newLeafData = {
+                    author,
+                    message,
+                    color: selectedColor,
+                    shape: selectedShape,
+                    likes: 0,
+                    time: '剛剛',
+                    x: pos.x,
+                    y: pos.y,
+                    rot: pos.rot,
+                    createdAt: window.FirebaseSDK?.serverTimestamp() || Date.now()
+                };
+
+                if (leavesCollectionRef) {
+                    try {
+                        const { addDoc } = window.FirebaseSDK;
+                        await addDoc(leavesCollectionRef, newLeafData);
+                    } catch (err) {
+                        console.error("Error saving to Firestore:", err);
+                        // Fallback local append
+                        newLeafData.id = Date.now().toString();
+                        leavesData.unshift(newLeafData);
+                        renderLeaves(searchInput.value);
+                    }
+                } else {
+                    newLeafData.id = Date.now().toString();
+                    leavesData.unshift(newLeafData);
+                    renderLeaves(searchInput.value);
+                }
+
+                closeCreateModal();
+                showToast('✨ 成功將許願葉掛上夢想樹！');
+                
+                formAddLeaf.reset();
+                charCount.textContent = '0';
+                previewTextSnippet.textContent = '寫下許願留言...';
+                leafPreview.textContent = '心願';
+            });
+
+            // Like Button (Updates Firestore document)
+            btnLike.addEventListener('click', async () => {
+                if (!activeLeafId) return;
+                const leaf = leavesData.find(l => l.id === activeLeafId);
+                if (leaf) {
+                    const newLikes = (leaf.likes || 0) + 1;
+                    leaf.likes = newLikes;
+                    viewLikesCount.textContent = newLikes;
+
+                    if (leavesCollectionRef && db) {
+                        try {
+                            const { doc, updateDoc } = window.FirebaseSDK;
+                            const leafDocRef = doc(db, 'artifacts', typeof __app_id !== 'undefined' ? __app_id : 'leaf-wish-tree-class30', 'public', 'data', 'wish_leaves', String(activeLeafId));
+                            await updateDoc(leafDocRef, { likes: newLikes });
+                        } catch (err) {
+                            console.warn("Could not sync likes to cloud:", err);
+                        }
+                    }
+
+                    renderLeaves(searchInput.value);
+                    showToast('❤️ 成功送出你的祝福！');
+                }
+            });
+
+            searchInput.addEventListener('input', (e) => {
+                renderLeaves(e.target.value.trim());
+            });
+
+            document.getElementById('btn-export').addEventListener('click', exportTreeImage);
+            document.getElementById('btn-zoom-in').addEventListener('click', () => applyZoom(0.15));
+            document.getElementById('btn-zoom-out').addEventListener('click', () => applyZoom(-0.15));
+            document.getElementById('btn-reset-view').addEventListener('click', resetView);
+        }
+
+        function updatePreviewStyle() {
+            const colorConfig = COLOR_PRESETS[selectedColor] || COLOR_PRESETS.emerald;
+            leafPreview.style.backgroundColor = colorConfig.bg;
+            leafPreview.style.color = colorConfig.text;
+        }
+
+        // --- MODAL CONTROLS ---
+        function openCreateModal() {
+            modalCreate.classList.remove('opacity-0', 'pointer-events-none');
+            modalCreateCard.classList.remove('scale-95');
+            modalCreateCard.classList.add('scale-100');
+            inputAuthor.focus();
+        }
+
+        function closeCreateModal() {
+            modalCreate.classList.add('opacity-0', 'pointer-events-none');
+            modalCreateCard.classList.remove('scale-100');
+            modalCreateCard.classList.add('scale-95');
+        }
+
+        function openViewModal(id) {
+            const leaf = leavesData.find(l => String(l.id) === String(id));
+            if (!leaf) return;
+
+            activeLeafId = id;
+            viewAuthor.textContent = leaf.author || '匿名';
+            viewMessage.textContent = leaf.message || '';
+            viewTime.textContent = `發布狀態：${leaf.time || '即時雲端'}`;
+            viewLikesCount.textContent = leaf.likes || 0;
+            viewLeafId.textContent = String(leaf.id).substring(0, 6);
+
+            const colorConfig = COLOR_PRESETS[leaf.color] || COLOR_PRESETS.emerald;
+            viewLeafHeader.style.backgroundColor = colorConfig.bg;
+            viewLeafHeader.style.color = colorConfig.text;
+            viewLeafIcon.className = `fa-solid ${SHAPE_ICONS[leaf.shape] || 'fa-leaf'}`;
+
+            modalView.classList.remove('opacity-0', 'pointer-events-none');
+            modalViewCard.classList.remove('scale-95');
+            modalViewCard.classList.add('scale-100');
+        }
+
+        function closeViewModal() {
+            modalView.classList.add('opacity-0', 'pointer-events-none');
+            modalViewCard.classList.remove('scale-100');
+            modalViewCard.classList.add('scale-95');
+            activeLeafId = null;
+        }
+
+        // --- PAN & ZOOM INTERACTION ---
+        function setupPanZoom() {
+            treeViewport.addEventListener('mousedown', (e) => {
+                if (e.target.closest('.leaf-item') || e.target.closest('button')) return;
+                isDraggingView = true;
+                startX = e.clientX - panX;
+                startY = e.clientY - panY;
+            });
+
+            window.addEventListener('mousemove', (e) => {
+                if (!isDraggingView) return;
+                panX = e.clientX - startX;
+                panY = e.clientY - startY;
+                updateTransform();
+            });
+
+            window.addEventListener('mouseup', () => {
+                isDraggingView = false;
+            });
+
+            treeViewport.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1 && !e.target.closest('.leaf-item')) {
+                    isDraggingView = true;
+                    startX = e.touches[0].clientX - panX;
+                    startY = e.touches[0].clientY - panY;
+                }
+            });
+
+            window.addEventListener('touchmove', (e) => {
+                if (!isDraggingView || e.touches.length !== 1) return;
+                panX = e.touches[0].clientX - startX;
+                panY = e.touches[0].clientY - startY;
+                updateTransform();
+            });
+
+            window.addEventListener('touchend', () => {
+                isDraggingView = false;
+            });
+
+            treeViewport.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                const delta = e.deltaY < 0 ? 0.1 : -0.1;
+                applyZoom(delta);
+            }, { passive: false });
+        }
+
+        function applyZoom(delta) {
+            zoomScale = Math.min(Math.max(0.6, zoomScale + delta), 2.2);
+            updateTransform();
+        }
+
+        function resetView() {
+            zoomScale = 1;
+            panX = 0;
+            panY = 0;
+            updateTransform();
+        }
+
+        function updateTransform() {
+            treeContainer.style.transform = `translate(calc(-50% + ${panX}px), calc(-50% + ${panY}px)) scale(${zoomScale})`;
+        }
+
+        // --- UTILITY FUNCTIONS ---
+        function showToast(msg) {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'px-4 py-3 bg-slate-800/90 text-white font-medium text-sm rounded-2xl shadow-xl backdrop-blur-md flex items-center gap-2 transform translate-y-4 opacity-0 transition-all duration-300';
+            toast.innerHTML = msg;
+
+            container.appendChild(toast);
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-4', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-4');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        function escapeHTML(str) {
+            return str.replace(/[&<>'"]/g, 
+                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
+        }
+
+        function exportTreeImage() {
+            showToast('📸 正在生成樹影相片...');
+            const currentScale = zoomScale;
+            const currentX = panX;
+            const currentY = panY;
+            resetView();
+
+            setTimeout(() => {
+                html2canvas(document.getElementById('tree-container'), {
+                    backgroundColor: null,
+                    scale: 2
+                }).then(canvas => {
+                    const link = document.createElement('a');
+                    link.download = `夢想許願樹_全班合照_${new Date().toISOString().slice(0,10)}.png`;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+
+                    zoomScale = currentScale;
+                    panX = currentX;
+                    panY = currentY;
+                    updateTransform();
+
+                    showToast('🎉 相片下載完成！');
+                }).catch(err => {
+                    console.error('Export error:', err);
+                    showToast('⚠️ 下載失敗，請重試');
+                });
+            }, 300);
+        }
+    </script>
+</body>
+</html>
